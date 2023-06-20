@@ -5,13 +5,11 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.media.Image;
 import android.os.Bundle;
-import androidx.gridlayout.widget.GridLayout;
-
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -20,61 +18,119 @@ import java.util.ArrayList;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
-
-    int score;
-    GridLayout gridLayout;
-    TextView scoreText, timeText;
-    Handler handlerImagesVisibility, remainingTimeHandler;
+    TextView timeText, scoreText;
+    int scoreValue;
+    Handler gameHandler;
     Runnable runnableImagesVisibility;
     ArrayList<ImageView> kennyImagesArrayList;
+    String kennyImagesId;
+    int resourceId;
+    int randomImageId;
+    CountDownTimer countDownTimer;
+    Intent restartIntent;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Initialize ettiğimiz değişkenleri burada çağırıyoruz.
         valueAssignment();
-
-        hideImages();
-
-        remainingTime();
+        // Görselleri rastgele bir biçimde çağıran, geri sayımı başlatan metodumuzu burada çağırıyoruz.
+        randomizeImageVisibilityCycle();
 
     }
 
-    public void increaseScore(View view) {
-        score++;
-        scoreText.setText("Score:" + score);
+    private void valueAssignment(){
+        timeText = findViewById(R.id.timeText);
+        scoreText = findViewById(R.id.scoreText);
+        kennyImagesArrayList = new ArrayList<ImageView>();
+        gameHandler = new Handler();
+        restartIntent = new Intent(MainActivity.this, MainActivity.class);
+    }
+
+    public void increaseScore(View view){
+        // Kenny imageView'lara tanımlanmış onClick metodu.
+        // ScoreText TextView'ın içerisindeki score değerini her onClick metodu çağırıldığında 1 arttıran bir metod.
+        scoreValue++;
+        scoreText.setText("Score : " + scoreValue);
     }
 
     private void kennyImageViewAssignment(){
-        kennyImagesArrayList = new ArrayList<ImageView>();
+        // Kenny image'ları bir ArrayList olarak tanımlıyor.
+        // getResources().getIdentifier komuut sırası ile String, "id", ve paket ismi değerlerini alarak bize objenin id'sini döndürüyor.
+        // id döndürülen ifadeyi findViewById komutu ile bularak ArrayList'e 0. index'ten başlayarak değer ataması yapıyoruz.
         for (int i = 1; i <= 25; i++){
-            String kennyImagesId = "kenny" + i;
-            int resourceId = getResources().getIdentifier(kennyImagesId, "id", getPackageName());
-            kennyImagesArrayList.add(i - 1, findViewById(resourceId));
+            kennyImagesId = "kenny" + i;
+            resourceId = getResources().getIdentifier(kennyImagesId, "id", getPackageName());
+            kennyImagesArrayList.add(i -1, findViewById(resourceId));
         }
     }
 
-    private void remainingTime() {
+    private void hideImages(){
+        // kennyImageViewAssignment içerisinde tanımlanmış kennyImagesArrayList++++
+        // ArrayList'inde bulunan tüm ImageView ifadelerini INVISIBLE yapıyoruz.
+        for (ImageView kennyImage : kennyImagesArrayList){
+            kennyImage.setVisibility(View.INVISIBLE);
+        }
+    }
 
-        CountDownTimer countDownTimer = new CountDownTimer(10000, 1000) {
+    private void displayRandomImage(){
+        // kennyImageViewAssignment içerisinde tanımlanmış kennyImagesArrayList ArrayList'inde ki ++
+        // ImageView'lardan rastgele bir adetini VISIBLE yapıyoruz.
+        randomImageId = new Random().nextInt(25);
+        kennyImagesArrayList.get(randomImageId).setVisibility(View.VISIBLE);
+    }
+    private void randomizeImageVisibilityCycle() {
+
+        // Her 0.5 saniyede kennyImagesArrayList ArrayList'te ki rastgele farklı bir ImageView'i düzenli
+        // olarak VISIBLE yapan thread'i oluşturan metod.
+
+        kennyImageViewAssignment();
+        hideImages();
+
+        runnableImagesVisibility = new Runnable() {
+
+            @Override
+            public void run() {
+
+                hideImages();
+
+                displayRandomImage();
+
+                gameHandler.postDelayed(runnableImagesVisibility, 500);
+
+            }
+
+        };
+
+        gameHandler.postDelayed(this::remainingTime, 2000);
+        gameHandler.postDelayed(runnableImagesVisibility, 2000);
+
+
+    }
+
+    private void remainingTime(){
+
+        // timeText içerisinde geri sayım yapmayı sağlayan bir metod.
+
+        countDownTimer = new CountDownTimer(20000, 1000) {
             @Override
             public void onTick(long milliSecondUntilFinished) {
-                long secondsRemaining = (milliSecondUntilFinished / 1000);
-                timeText.setText("Time : " + secondsRemaining);
+                timeText.setText("Time : " + (milliSecondUntilFinished / 1000));
             }
 
             @Override
             public void onFinish() {
 
-                // !Hata Oyun bittiğinde NO dersek geri gelebiliyoruz !!!!
-
-                timeText.setText("Finished");
-                handlerImagesVisibility.removeCallbacks(runnableImagesVisibility);
-
-                for (ImageView kennyImage : kennyImagesArrayList){
-                    kennyImage.setVisibility(View.INVISIBLE);
-                }
+                // Oyun bitince timeText ile Game Over yazdırıyoruz ve runnableImagesVisibility
+                // thread'ini iptal ediyoruz. Ardından Bir AlertDialog oluşturarak kullanıcıdan oyunu
+                // tekrar başlatmak isteyip istemediğini soruyoruz.
+                timeText.setText("Game Over !");
+                gameHandler.removeCallbacks(runnableImagesVisibility);
+                hideImages();
 
                 AlertDialog.Builder finishedAlertDialog = new AlertDialog.Builder(MainActivity.this);
                 finishedAlertDialog.setTitle("Restart ?");
@@ -83,16 +139,16 @@ public class MainActivity extends AppCompatActivity {
                 finishedAlertDialog.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        Intent intent = new Intent(MainActivity.this, MainActivity.class);
-                        startActivity(intent);
-
+                        // Mevcut activity'i tekrar başlatmamızı sağlıyor.
+                        startActivity(restartIntent);
+                        finish();
                     }
                 });
 
                 finishedAlertDialog.setNegativeButton("No", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        Toast.makeText(MainActivity.this, "Game over !", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "Game Over ! Score : " + scoreValue, Toast.LENGTH_SHORT).show();
                     }
                 });
 
@@ -103,36 +159,6 @@ public class MainActivity extends AppCompatActivity {
 
         countDownTimer.start();
 
-    }
-
-
-    private void hideImages(){
-        handlerImagesVisibility = new Handler();
-        runnableImagesVisibility = new Runnable() {
-            @Override
-            public void run() {
-                kennyImageViewAssignment();
-                for (ImageView kennyImage : kennyImagesArrayList){
-                    kennyImage.setVisibility(View.INVISIBLE);
-                }
-                Random random = new Random();
-                int randomKennyImageId = random.nextInt(25);
-                kennyImagesArrayList.get(randomKennyImageId).setVisibility(View.VISIBLE);
-                handlerImagesVisibility.postDelayed(this, 1000);
-            }
-        };
-
-
-
-
-        handlerImagesVisibility.post(runnableImagesVisibility);
-
-    }
-
-    private void valueAssignment(){
-        gridLayout = findViewById(R.id.gridLayout);
-        timeText = findViewById(R.id.timeText);
-        scoreText = findViewById(R.id.scoreText);
     }
 
 
